@@ -29,32 +29,31 @@ fn proj_vec_onto_plane(u: Vec3, n: Vec3) -> Vec3 {
     u - (u.dot(n) * n)
 }
 
-fn update_plane_orient_system(mut q: Query<(&mut Transform, &AnimFrom, &AnimTo)>) {
-    for (mut tr, from, to) in q.iter_mut() {
-        let from = from.0 * (Vec3::Z * ORBIT_RADIUS);
-        let to = to.0 * (Vec3::Z * ORBIT_RADIUS);
+fn update_plane_orient_system(
+    q: Query<(&GlobalTransform, &AnimFrom, &AnimTo, &Children)>,
+    mut qc: Query<&mut Transform>,
+) {
+    for (tr, from, to, children) in q.iter() {
+        let from = from.0 * Vec3::Z;
+        let to = to.0 * Vec3::Z;
 
         let plane_normal = (tr.rotation * Vec3::Z).normalize();
 
         // project 3d points onto plane
         let delta = to - from;
         // let delta = tr.rotation * delta;
-        let proj_d = proj_vec_onto_plane(delta, plane_normal);
+        let proj_d = proj_vec_onto_plane(delta, plane_normal).normalize();
 
         let fw = tr.rotation * Vec3::Y;
-        let proj_fw = proj_vec_onto_plane(fw, plane_normal);
-
-        // plane axii
-        let proj_x = proj_vec_onto_plane(Vec3::X, plane_normal).normalize();
-        let proj_y = proj_vec_onto_plane(Vec3::Z, plane_normal).normalize();
-
-        // projections in terms of plane
-        let proj_d = Vec2::new(proj_d.dot(proj_x), proj_d.dot(proj_y));
-        let proj_fw = Vec2::new(proj_fw.dot(proj_x), proj_fw.dot(proj_y));
+        let proj_fw = proj_vec_onto_plane(fw, plane_normal).normalize();
 
         let ang = proj_d.dot(proj_fw).acos();
 
-        tr.rotation *= Quat::from_axis_angle(Vec3::Z, ang);
+        for child in children.iter() {
+            let mut tr = qc.get_mut(*child).unwrap();
+
+            tr.rotation = Quat::from_axis_angle(Vec3::Z, ang);
+        }
     }
 }
 

@@ -39,19 +39,26 @@ fn update_plane_orient_system(
 
         let plane_normal = (tr.rotation * Vec3::Z).normalize();
 
-        // project 3d points onto plane
         let delta = to - from;
-        // let delta = tr.rotation * delta;
         let proj_d = proj_vec_onto_plane(delta, plane_normal).normalize();
 
         let fw = tr.rotation * Vec3::Y;
         let proj_fw = proj_vec_onto_plane(fw, plane_normal).normalize();
 
-        let ang = proj_d.dot(proj_fw).acos();
+        let mut d = proj_d.dot(proj_fw);
+        if d > 0.0 {
+            let fw = tr.rotation * -Vec3::Y;
+            let proj_fw = proj_vec_onto_plane(fw, plane_normal).normalize();
+
+            d = proj_d.dot(proj_fw);
+        }
+
+        let ang = d.acos();
 
         for child in children.iter() {
             let mut tr = qc.get_mut(*child).unwrap();
 
+            dbg!(ang);
             tr.rotation = Quat::from_axis_angle(Vec3::Z, ang);
         }
     }
@@ -92,16 +99,16 @@ fn setup_planes_system(
                 long: -3.141592 / 3.,
             },
         ],
-        [
-            LatLong {
-                lat: 0.,
-                long: -0.2,
-            },
-            LatLong {
-                lat: 3.14 / 5.,
-                long: -3.14 / 8.,
-            },
-        ],
+        // [
+        //     LatLong {
+        //         lat: 0.,
+        //         long: -0.2,
+        //     },
+        //     LatLong {
+        //         lat: 3.14 / 5.,
+        //         long: -3.14 / 8.,
+        //     },
+        // ],
     ];
 
     for path in PATHS {
@@ -131,8 +138,8 @@ fn setup_planes_system(
             .with_children(|chld| {
                 chld.spawn_bundle(PbrBundle {
                     mesh: meshes.add(Mesh::from(shape::Capsule {
-                        radius: 0.02,
-                        depth: 0.2,
+                        radius: 0.03,
+                        depth: 0.08,
                         ..Default::default()
                     })),
                     material: materials.add(StandardMaterial {

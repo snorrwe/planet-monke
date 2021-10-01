@@ -45,21 +45,18 @@ fn update_plane_orient_system(
         let fw = tr.rotation * Vec3::Y;
         let proj_fw = proj_vec_onto_plane(fw, plane_normal).normalize();
 
-        let mut d = proj_d.dot(proj_fw);
+        let d = proj_d.dot(proj_fw);
+        let mut axis = Vec3::Z;
         if d > 0.0 {
-            let fw = tr.rotation * -Vec3::Y;
-            let proj_fw = proj_vec_onto_plane(fw, plane_normal).normalize();
-
-            d = proj_d.dot(proj_fw);
+            // no fucking clue why, but if d > 0 the orientation shits the bed
+            axis = -Vec3::Z;
         }
 
         let ang = d.acos();
 
         for child in children.iter() {
             let mut tr = qc.get_mut(*child).unwrap();
-
-            dbg!(ang);
-            tr.rotation = Quat::from_axis_angle(Vec3::Z, ang);
+            tr.rotation = Quat::from_axis_angle(axis, ang);
         }
     }
 }
@@ -99,16 +96,16 @@ fn setup_planes_system(
                 long: -3.141592 / 3.,
             },
         ],
-        // [
-        //     LatLong {
-        //         lat: 0.,
-        //         long: -0.2,
-        //     },
-        //     LatLong {
-        //         lat: 3.14 / 5.,
-        //         long: -3.14 / 8.,
-        //     },
-        // ],
+        [
+            LatLong {
+                lat: 0.,
+                long: -0.2,
+            },
+            LatLong {
+                lat: 3.14 / 5.,
+                long: -3.14 / 8.,
+            },
+        ],
     ];
 
     for path in PATHS {

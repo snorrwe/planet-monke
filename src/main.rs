@@ -1,17 +1,22 @@
+mod countries;
+
 use std::{mem::swap, time::Duration};
 
 use bevy::prelude::*;
+use countries::PATHS;
 
 const RADIUS: f32 = 1.45;
 const VELOCITY: f32 = 1.;
 const ORBIT_RADIUS: f32 = RADIUS + 0.2;
 
+#[derive(Debug, Clone, Copy)]
+struct PlaneId(pub usize);
 struct AnimFrom(pub Quat);
 struct AnimTo(pub Quat);
 struct AnimTimer(pub Timer);
 
 #[derive(Clone, Copy, Default)]
-struct LatLong {
+pub struct LatLong {
     pub lat: f32,
     pub long: f32,
 }
@@ -33,26 +38,25 @@ fn update_plane_orient_system(
     q: Query<(&GlobalTransform, &AnimFrom, &AnimTo, &Children)>,
     mut qc: Query<&mut Transform>,
 ) {
+    // TODO:
+    // this actually this doesn't have to run every update, just when the plane changes
+    // destination...
     for (tr, from, to, children) in q.iter() {
-        let from = from.0 * Vec3::Z;
-        let to = to.0 * Vec3::Z;
+        let from_point = from.0 * Vec3::Z;
+        let to_point = to.0 * Vec3::Z;
 
         let plane_normal = (tr.rotation * Vec3::Z).normalize();
 
-        let delta = to - from;
+        let delta = to_point - from_point;
         let proj_d = proj_vec_onto_plane(delta, plane_normal).normalize();
 
         let fw = tr.rotation * Vec3::Y;
         let proj_fw = proj_vec_onto_plane(fw, plane_normal).normalize();
 
         let d = proj_d.dot(proj_fw);
-        let mut axis = Vec3::Z;
-        if d > 0.0 {
-            // no fucking clue why, but if d > 0 the orientation shits the bed
-            axis = -Vec3::Z;
-        }
 
         let ang = d.acos();
+        let axis = Vec3::Z;
 
         for child in children.iter() {
             let mut tr = qc.get_mut(*child).unwrap();
@@ -86,32 +90,9 @@ fn setup_planes_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    const PATHS: &[[LatLong; 2]] = &[
-        [
-            LatLong {
-                lat: -0.2,
-                long: 1.3,
-            },
-            LatLong {
-                lat: 3.141592 / 4.,
-                long: -3.141592 / 3.,
-            },
-        ],
-        [
-            LatLong {
-                lat: 0.,
-                long: -0.2,
-            },
-            LatLong {
-                lat: 3.14 / 5.,
-                long: -3.14 / 8.,
-            },
-        ],
-    ];
-
     let plane_handle = asset_server.load("monke.gltf#Mesh0/Primitive0");
 
-    for path in PATHS {
+    for (i, path) in PATHS.iter().enumerate() {
         let [from, to] = *path;
         // spawn our 'plane'
         {
@@ -147,7 +128,8 @@ fn setup_planes_system(
                     }),
                     transform,
                     ..Default::default()
-                });
+                })
+                .insert(PlaneId(i));
             });
         }
 

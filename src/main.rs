@@ -84,6 +84,7 @@ fn setup_planes_system(
     mut cmd: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
     const PATHS: &[[LatLong; 2]] = &[
         [
@@ -108,6 +109,8 @@ fn setup_planes_system(
         ],
     ];
 
+    let plane_handle = asset_server.load("monke.gltf#Mesh0/Primitive0");
+
     for path in PATHS {
         let [from, to] = *path;
         // spawn our 'plane'
@@ -125,6 +128,7 @@ fn setup_planes_system(
                 *w *= -1.;
             }
             let t = from.angle_between(to) * ORBIT_RADIUS / VELOCITY;
+            let plane_handle = plane_handle.clone();
             cmd.spawn_bundle((
                 AnimFrom(from),
                 AnimTo(to),
@@ -133,19 +137,15 @@ fn setup_planes_system(
                 GlobalTransform::default(),
             ))
             .with_children(|chld| {
+                let mut transform = Transform::from_translation(Vec3::Z * ORBIT_RADIUS);
+                transform.scale = Vec3::splat(0.1);
                 chld.spawn_bundle(PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Capsule {
-                        radius: 0.03,
-                        depth: 0.08,
-                        ..Default::default()
-                    })),
+                    mesh: plane_handle,
                     material: materials.add(StandardMaterial {
                         base_color: Color::YELLOW,
-                        metallic: 0.3,
-                        unlit: false,
                         ..Default::default()
                     }),
-                    transform: Transform::from_translation(Vec3::Z * ORBIT_RADIUS),
+                    transform,
                     ..Default::default()
                 });
             });

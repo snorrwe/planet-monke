@@ -3,7 +3,8 @@ use std::{mem::swap, time::Duration};
 use bevy::prelude::*;
 
 const RADIUS: f32 = 1.45;
-const VELOCITY: f32 = 2.;
+const VELOCITY: f32 = 1.;
+const ORBIT_RADIUS: f32 = RADIUS + 0.2;
 
 struct AnimFrom(pub Quat);
 struct AnimTo(pub Quat);
@@ -17,6 +18,44 @@ struct LatLong {
 
 fn latlong_to_quat(l: LatLong) -> Quat {
     Quat::from_axis_angle(Vec3::X, l.lat) * Quat::from_axis_angle(Vec3::Y, l.long)
+}
+
+fn proj_vec_onto_plane(u: Vec3, n: Vec3) -> Vec3 {
+    debug_assert!(
+        (n.length() - 1.0).abs() < 1e-6,
+        "Plane normal must be normalized. {:?}",
+        n
+    );
+    u - (u.dot(n) * n)
+}
+
+fn update_plane_orient_system(mut q: Query<(&mut Transform, &AnimFrom, &AnimTo)>) {
+    for (mut tr, from, to) in q.iter_mut() {
+        let from = from.0 * (Vec3::Z * ORBIT_RADIUS);
+        let to = to.0 * (Vec3::Z * ORBIT_RADIUS);
+
+        let plane_normal = (tr.rotation * Vec3::Z).normalize();
+
+        // project 3d points onto plane
+        let delta = to - from;
+        // let delta = tr.rotation * delta;
+        let proj_d = proj_vec_onto_plane(delta, plane_normal);
+
+        let fw = tr.rotation * Vec3::Y;
+        let proj_fw = proj_vec_onto_plane(fw, plane_normal);
+
+        // plane axii
+        let proj_x = proj_vec_onto_plane(Vec3::X, plane_normal).normalize();
+        let proj_y = proj_vec_onto_plane(Vec3::Z, plane_normal).normalize();
+
+        // projections in terms of plane
+        let proj_d = Vec2::new(proj_d.dot(proj_x), proj_d.dot(proj_y));
+        let proj_fw = Vec2::new(proj_fw.dot(proj_x), proj_fw.dot(proj_y));
+
+        let ang = proj_d.dot(proj_fw).acos();
+
+        tr.rotation *= Quat::from_axis_angle(Vec3::Z, ang);
+    }
 }
 
 fn update_latlong_system(
@@ -66,8 +105,6 @@ fn setup_planes_system(
         ],
     ];
 
-    const PLANE_RADIUS: f32 = RADIUS + 0.2;
-
     for path in PATHS {
         let [from, to] = *path;
         // spawn our 'plane'
@@ -84,7 +121,7 @@ fn setup_planes_system(
                 *z *= -1.;
                 *w *= -1.;
             }
-            let t = from.angle_between(to) * PLANE_RADIUS / VELOCITY;
+            let t = from.angle_between(to) * ORBIT_RADIUS / VELOCITY;
             cmd.spawn_bundle((
                 AnimFrom(from),
                 AnimTo(to),
@@ -94,14 +131,18 @@ fn setup_planes_system(
             ))
             .with_children(|chld| {
                 chld.spawn_bundle(PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Cube { size: 0.12 })),
+                    mesh: meshes.add(Mesh::from(shape::Capsule {
+                        radius: 0.02,
+                        depth: 0.2,
+                        ..Default::default()
+                    })),
                     material: materials.add(StandardMaterial {
                         base_color: Color::YELLOW,
                         metallic: 0.3,
                         unlit: false,
                         ..Default::default()
                     }),
-                    transform: Transform::from_translation(Vec3::Z * (PLANE_RADIUS)),
+                    transform: Transform::from_translation(Vec3::Z * ORBIT_RADIUS),
                     ..Default::default()
                 });
             });
@@ -125,7 +166,7 @@ fn setup_planes_system(
                         unlit: false,
                         ..Default::default()
                     }),
-                    transform: Transform::from_translation(Vec3::Z * (PLANE_RADIUS)),
+                    transform: Transform::from_translation(Vec3::Z * (ORBIT_RADIUS)),
                     ..Default::default()
                 });
             });
@@ -175,6 +216,10 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup_system.system())
         .add_startup_system(setup_planes_system.system())
-        .add_system(update_latlong_system.system())
+        .add_system(
+            update_latlong_system
+                .system()
+                .chain(update_plane_orient_system.system()),
+        )
         .run();
 }

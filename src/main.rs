@@ -56,7 +56,21 @@ fn update_plane_orient_system(
         let d = proj_d.dot(proj_fw);
 
         let ang = d.acos();
-        let axis = Vec3::Z;
+        let mut axis = Vec3::Z;
+
+        let triple = delta.cross(fw).dot(plane_normal);
+
+        // absolute what the fuckity fuck
+        //
+        // orientation is _sometimes_ fucked up, depending if the sign of the triple prod and the
+        // dot prod are the same or not...
+        if triple * d < 0.0 {
+            if d < 0.0 {
+                axis *= -1.0;
+            }
+        } else if d > 0.0 {
+            axis *= -1.0;
+        }
 
         for child in children.iter() {
             let mut tr = qc.get_mut(*child).unwrap();

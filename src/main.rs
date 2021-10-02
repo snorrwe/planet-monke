@@ -2,7 +2,7 @@ mod countries;
 
 use std::{mem::swap, time::Duration};
 
-use bevy::prelude::*;
+use bevy::{prelude::*, tasks::ComputeTaskPool};
 use countries::PATHS;
 
 const RADIUS: f32 = 1.45;
@@ -14,6 +14,8 @@ struct PlaneId(pub usize);
 struct AnimFrom(pub Quat);
 struct AnimTo(pub Quat);
 struct AnimTimer(pub Timer);
+
+struct ChildOrientation(pub Quat);
 
 #[derive(Clone, Copy, Default)]
 pub struct LatLong {
@@ -35,13 +37,13 @@ fn proj_vec_onto_plane(u: Vec3, n: Vec3) -> Vec3 {
 }
 
 fn update_plane_orient_system(
-    q: Query<(&GlobalTransform, &AnimFrom, &AnimTo, &Children)>,
-    mut qc: Query<&mut Transform>,
+    mut q: Query<(&mut ChildOrientation, &GlobalTransform, &AnimFrom, &AnimTo)>,
+    pool: Res<ComputeTaskPool>,
 ) {
     // TODO:
     // this actually this doesn't have to run every update, just when the plane changes
     // destination...
-    for (tr, from, to, children) in q.iter() {
+    q.par_for_each_mut(&*pool, 8, |(mut orient, tr, from, to)| {
         let from_point = from.0 * Vec3::Z;
         let to_point = to.0 * Vec3::Z;
 
@@ -72,9 +74,18 @@ fn update_plane_orient_system(
             axis *= -1.0;
         }
 
+        orient.0 = Quat::from_axis_angle(axis, ang);
+    });
+}
+
+fn update_child_orients_system(
+    q: Query<(&Children, &ChildOrientation)>,
+    mut qc: Query<&mut Transform>,
+) {
+    for (children, orient) in q.iter() {
         for child in children.iter() {
             let mut tr = qc.get_mut(*child).unwrap();
-            tr.rotation = Quat::from_axis_angle(axis, ang);
+            tr.rotation = orient.0;
         }
     }
 }
@@ -82,9 +93,10 @@ fn update_plane_orient_system(
 fn update_latlong_system(
     t: Res<Time>,
     mut q: Query<(&mut Transform, &mut AnimFrom, &mut AnimTo, &mut AnimTimer)>,
+    pool: Res<ComputeTaskPool>,
 ) {
     let delta = t.delta();
-    for (mut current, mut from, mut to, mut t) in q.iter_mut() {
+    q.par_for_each_mut(&*pool, 8, |(mut current, mut from, mut to, mut t)| {
         t.0.tick(delta);
 
         if t.0.finished() {
@@ -95,7 +107,7 @@ fn update_latlong_system(
         let t = t.0.percent();
 
         current.rotation = from.0.slerp(to.0, t);
-    }
+    });
 }
 
 fn setup_planes_system(
@@ -130,6 +142,7 @@ fn setup_planes_system(
                 AnimTimer(Timer::new(Duration::from_secs_f32(t), true)),
                 Transform::default(),
                 GlobalTransform::default(),
+                ChildOrientation(Quat::default()),
             ))
             .with_children(|chld| {
                 let mut transform = Transform::from_translation(Vec3::Z * ORBIT_RADIUS);
@@ -215,10 +228,8 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup_system.system())
         .add_startup_system(setup_planes_system.system())
-        .add_system(
-            update_latlong_system
-                .system()
-                .chain(update_plane_orient_system.system()),
-        )
+        .add_system(update_latlong_system.system())
+        .add_system(update_plane_orient_system.system())
+        .add_system(update_child_orients_system.system())
         .run();
 }

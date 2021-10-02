@@ -199,8 +199,6 @@ fn setup_system(
         })),
         material: materials.add(StandardMaterial {
             base_color: Color::BLUE,
-            metallic: 0.8,
-            unlit: false,
             ..Default::default()
         }),
         transform: Transform::from_translation(Vec3::ZERO),
@@ -208,12 +206,12 @@ fn setup_system(
     });
     // light
     cmd.spawn_bundle(LightBundle {
-        transform: Transform::from_translation(Vec3::new(0.0, 5.0, 5.0)),
+        transform: Transform::from_translation(Vec3::new(0.0, -1.0, 5.0)),
         ..Default::default()
     });
     // camera
     cmd.spawn_bundle(OrthographicCameraBundle {
-        transform: Transform::from_translation(Vec3::new(0.0, 0.0, 2.0))
+        transform: Transform::from_translation(Vec3::new(0.0, -2.0, 2.0))
             .looking_at(Vec3::ZERO, Vec3::Y),
         orthographic_projection: bevy::render::camera::OrthographicProjection {
             scale: 0.005,
